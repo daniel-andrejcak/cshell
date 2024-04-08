@@ -1,0 +1,9 @@
+*.pdf
+.*
+*.json
+*.o
+*.exe
+*.txt
+danielshell
+local_socket
+test
