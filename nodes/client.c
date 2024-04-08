@@ -1,21 +1,6 @@
 #include "../header_files/client.h"
 #include "../header_files/includes.h"
 
-int countCommands(const char *str, char ch)
-{
-    int count = 0;
-
-    for (int i = 0; str[i] != '\0'; i++)
-    {
-        if (str[i] == ch)
-        {
-            count++;
-        }
-    }
-
-    return count + 1;
-}
-
 void clientSide(char *username, char *computername, const char *address, int port)
 {
     struct sockaddr_in server_addr;
@@ -47,6 +32,7 @@ void clientSide(char *username, char *computername, const char *address, int por
     }
 
     size_t buffer_size = 0;
+    fd_set read_fds;
 
     while (true)
     {
@@ -56,53 +42,67 @@ void clientSide(char *username, char *computername, const char *address, int por
         char *command_buffer = NULL;
 
         fprintf(stdout, "%02d:%02d %s@%s$ ", time_info->tm_hour, time_info->tm_min, computername, username);
+        fflush(stdout);
 
-        ssize_t characters_read = getline(&command_buffer, &buffer_size, stdin);
+        FD_ZERO(&read_fds);
+        FD_SET(STDIN_FILENO, &read_fds);  // Add stdin to the set
+        FD_SET(client_socket, &read_fds); // Add client socket to the set
 
-        if (characters_read == -1)
+        // using select() monitor stdin and socket for activity
+        if (select(client_socket + 1, &read_fds, NULL, NULL, NULL) == -1)
         {
-            printf("Error reading input");
+            perror("Select error");
             exit(EXIT_FAILURE);
         }
 
-        command_buffer[characters_read - 1] = '\0';
+        // Read from stdin and send to server
+        if (FD_ISSET(STDIN_FILENO, &read_fds))
+        {
+            ssize_t characters_read = getline(&command_buffer, &buffer_size, stdin);
 
-        // int commandCount = countCommands(command_buffer, ';');
-
-        // ends the program
-        if (strncmp(command_buffer, "quit", 4) == 0)
-        {
-            return; // doplnit nejaku funkcionalitu, aby sa neukoncil program, ale iba toto konkretne spojenie
-        }
-        // help file
-        else if (strncmp(command_buffer, "help", 4) == 0)
-        {
-            printHelpStrning();
-        }
-        else
-        {
-            int commandCount = countCommands(command_buffer, ';');
-            // Send input to server
-            if (write(client_socket, command_buffer, characters_read) < 0)
+            if (characters_read == -1)
             {
-                perror("Failed to send data to server");
-                break;
+                printf("Error reading input");
+                exit(EXIT_FAILURE);
             }
 
-            if (strncmp(command_buffer, "halt", 4) == 0)
+            command_buffer[characters_read - 1] = '\0';
+
+            // ends the program
+            if (strncmp(command_buffer, "quit", 4) == 0)
             {
-                exit(EXIT_SUCCESS); // doplnit nejaku funkcionalitu, aby sa neukoncil program, ale iba toto konkretne spojenie
+                return; // doplnit nejaku funkcionalitu, aby sa neukoncil program, ale iba toto konkretne spojenie
             }
-
-            for (size_t i = 0; i < commandCount; i++)
+            // help file
+            else if (strncmp(command_buffer, "help", 4) == 0)
             {
-                char buffer[MAX_COMMAND_LEN] = {'\0'};
-                read(client_socket, buffer, MAX_COMMAND_LEN);
+                printHelpStrning();
+            }
+            else
+            {
+                // Send input to server
+                if (write(client_socket, command_buffer, characters_read) < 0)
+                {
+                    perror("Failed to send data to server");
+                    break;
+                }
 
-                printf("%s", buffer);
+                if (strncmp(command_buffer, "halt", 4) == 0)
+                {
+                    close(client_socket);
+                    exit(EXIT_SUCCESS); // doplnit nejaku funkcionalitu, aby sa neukoncil program, ale iba toto konkretne spojenie
+                }
             }
         }
 
-        free(command_buffer);
+        if (FD_ISSET(client_socket, &read_fds))
+        {
+            char buffer[MAX_COMMAND_LEN] = {'\0'};
+            read(client_socket, buffer, MAX_COMMAND_LEN);
+
+            printf("%s", buffer);
+        }
     }
+
+    close(client_socket);
 }

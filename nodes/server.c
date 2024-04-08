@@ -28,6 +28,9 @@ void *handleClient(void *arg)
             // split input on ; to separate different independant commands
             splitCommands(buffer, splitBuffer, ";", &commandCount);
 
+            // redirecting output to socket - default + for error messages
+            dup2(clientSocket, STDOUT_FILENO);
+
             for (size_t i = 0; i < commandCount; i++)
             {
                 char *parsedCommand[1024];
@@ -37,11 +40,11 @@ void *handleClient(void *arg)
                 int input_fd = STDIN_FILENO;
                 int output_fd = clientSocket;
 
-                if (strcmp(parsedCommand[index - 2], "<") == 0 || strcmp(parsedCommand[index - 2], ">") == 0)
+                if (index > 2 && (strcmp(parsedCommand[index - 2], "<") == 0 || strcmp(parsedCommand[index - 2], ">") == 0))
                 {
                     if (strcmp(parsedCommand[index - 2], "<") == 0)
                     {
-                        input_fd = open(parsedCommand[index - 1], O_WRONLY | O_TRUNC | O_CREAT, 0644);
+                        input_fd = open(parsedCommand[index - 1], O_RDONLY);
                     }
 
                     if (strcmp(parsedCommand[index - 2], ">") == 0)
@@ -52,11 +55,11 @@ void *handleClient(void *arg)
                     parsedCommand[index - 1] = NULL;
                     parsedCommand[index - 2] = NULL;
 
-                    if (strcmp(parsedCommand[index - 4], "<") == 0 || strcmp(parsedCommand[index - 4], ">") == 0)
+                    if (index > 4 && (strcmp(parsedCommand[index - 4], "<") == 0 || strcmp(parsedCommand[index - 4], ">") == 0))
                     {
                         if (strcmp(parsedCommand[index - 4], "<") == 0)
                         {
-                            input_fd = open(parsedCommand[index - 3], O_WRONLY | O_TRUNC | O_CREAT, 0644);
+                            input_fd = open(parsedCommand[index - 3], O_RDONLY);
                         }
 
                         if (strcmp(parsedCommand[index - 4], ">") == 0)
@@ -68,17 +71,6 @@ void *handleClient(void *arg)
                         parsedCommand[index - 4] = NULL;
                     }
                 }
-
-                /*if (output_fd)
-                {
-                    printf("redirected output");
-
-                    if (dup2(output_fd, STDOUT_FILENO) < 0)
-                    {
-                        perror("dup2");
-                        exit(EXIT_FAILURE);
-                    }
-                }*/
 
                 executeCommand(parsedCommand[0], parsedCommand, input_fd, output_fd);
             }
@@ -117,12 +109,12 @@ void serverSide(char *address, int port)
         exit(1);
     }
 
-    /*int opt = 1;
+    int opt = 1;
     if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
     {
         perror("setsockopt");
         exit(EXIT_FAILURE);
-    }*/
+    }
 
     // bind socket with local address
     if (bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
