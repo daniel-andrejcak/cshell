@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall
-SRCS = main.c nodes/server.c nodes/client.c nodes/server/parse_commands.c 
+SRCS = main.c nodes/server.c nodes/client.c command_functions.c 
 OBJS = $(SRCS:.c=.o)
 TARGET = danielshell
 
@@ -17,4 +17,5 @@ objects:
 	mkdir -p objects
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(addprefix objects/,$(notdir $(OBJS))) $(TARGET)
+	rmdir objects
